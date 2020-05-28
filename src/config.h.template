@@ -1,0 +1,23 @@
+//CONFIG START
+
+#define DEBUG false
+
+#define FFWSID "SSDI"
+#define FFWPSK "PSK"
+#define ADMINSID "SSID"
+#define ADMINPSK "PSK"
+
+#define IOTUSER "IoT"
+#define IOTPASS "IoT_PASS"
+#define ADMINUSER "admin"
+#define ADMINPASS "admin_PASS"
+#define UPDATE_PATH "/update"
+
+#define INPUT_PIN 5
+#define RELAY_PIN 4
+#define BLINK_COUNT_DEFAULT 3
+#define BLINK_DELAY_DEFAULT 300
+
+#define MAX_WIFI_RETRY = 15
+
+//CONFIG END

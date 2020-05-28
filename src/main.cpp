@@ -7,30 +7,11 @@
 #include <ESP8266HTTPUpdateServer.h>
 #include <EEPROM.h>
 
+#include <main.h>
 #include <config.h>
-
-/*  MODES:
-0 = Normal On Off no blinking (Default)
-1 = Normal On Off with blinking
-2 = Impulse switch
-*/
 
 ESP8266WebServer server(80);
 ESP8266HTTPUpdateServer httpUpdater;
-
-int state = LOW;
-byte mode = 255;
-unsigned long alarm = 0;
-
-int blinkCount;
-unsigned int blinkDelay;
-unsigned int lastBlink;
-
-bool needRestart = false;
-
-void handleRoot();
-void blinkHandler();
-void alarmHandler();
 
 void setup(void)
 {
@@ -46,10 +27,10 @@ void setup(void)
     Serial.print("Chip-ID: ");
     Serial.println(chipid);
 
-    if (chipid == "c42cb0") mode = 2; //DEBUG
-    if (chipid == "c492f6") mode = 2; //Fahrzeughalle
-    if (chipid == "c419a0") mode = 0; //Flur
-    if (chipid == "c4f1c0") mode = 1; // Außen Fahrzeughalle
+    if (chipid == "c42cb0") mode = 1; // Außen Fahrzeughalle
+    if (chipid == "c492f6") mode = 2; // Fahrzeughalle
+    if (chipid == "c419a0") mode = 0; // Flur
+    if (chipid == "c4f1c0") mode = 1; // Außen Fahrzeughalle old
     if (chipid == "c4994b") mode = 1; // Außen Gemeinde
     if (mode == 255)
     {
@@ -60,33 +41,7 @@ void setup(void)
     Serial.print("Light mode: ");
     Serial.println(mode);
 
-    WiFi.mode(WIFI_STA);
-    WiFi.persistent(false);
-    WiFi.setOutputPower(20.5);
-    if (DEBUG)
-    {
-        WiFi.begin(ADMINSID, ADMINPSK);
-    }
-    else
-    {
-        WiFi.begin(FFWSID, FFWPSK);
-    }
-    while (WiFi.waitForConnectResult(15000) != WL_CONNECTED)
-    {
-        Serial.println("WiFi failed, retrying.");
-        WiFi.begin(FFWSID, FFWPSK);
-        if (WiFi.waitForConnectResult(15000) == WL_CONNECTED)
-            break;
-        Serial.println("WiFi failed, retrying.");
-        WiFi.begin(FFWSID, FFWPSK);
-        if (WiFi.waitForConnectResult(15000) == WL_CONNECTED)
-            break;
-        Serial.println("WiFi failed, retrying with admin WLAN.");
-        WiFi.begin(ADMINSID, ADMINPSK);
-    }
-    Serial.println("WIFI connected!");
-    Serial.print("IP: ");
-    Serial.println(WiFi.localIP());
+    connectToWifi();
 
     httpUpdater.setup(&server, UPDATE_PATH, ADMINUSER, ADMINPASS);
     server.begin();
@@ -107,6 +62,74 @@ void loop(void)
         Serial.println("Restarting...");
         ESP.restart();
     }
+}
+
+void connectToWifi(void)
+{
+    WiFi.disconnect();
+    WiFi.mode(WIFI_OFF);
+    WiFi.mode(WIFI_STA);
+    WiFi.persistent(false);
+    WiFi.setOutputPower(20.5);
+
+    if (DEBUG)
+    {
+        WiFi.begin(ADMINSID, ADMINPSK);
+    }
+    else
+    {
+        WiFi.begin(FFWSID, FFWPSK);
+    }
+
+    while (WiFi.waitForConnectResult(15000) != WL_CONNECTED)
+    {
+        Serial.println("WiFi failed, retrying.");
+        WiFi.begin(FFWSID, FFWPSK);
+        if (WiFi.waitForConnectResult(15000) == WL_CONNECTED)
+            break;
+        Serial.println("WiFi failed, retrying.");
+        WiFi.begin(FFWSID, FFWPSK);
+        if (WiFi.waitForConnectResult(15000) == WL_CONNECTED)
+            break;
+        Serial.println("WiFi failed, retrying with admin WLAN.");
+        WiFi.begin(ADMINSID, ADMINPSK);
+    }
+
+    Serial.println("WIFI connected!");
+    Serial.print("IP: ");
+    Serial.println(WiFi.localIP());
+}
+
+void checkWifi()
+{
+
+    if(WiFi.status() != WL_CONNECTED){
+        if(wifiRetry >= MAX_WIFI_RETRY){
+           Serial.println("Max WIFI reconnect attemps reached. Restarting..."); 
+           needRestart = true;
+           return;
+        }
+        wifiRetry++;
+        Serial.println("WiFi not connected. Try to reconnect. Try: " + String(wifiRetry));
+        WiFi.disconnect();
+        WiFi.mode(WIFI_OFF);
+        WiFi.mode(WIFI_STA);
+        if (DEBUG)
+        {
+            Serial.println("Debugmode on. Try admin WLAN.");
+            WiFi.begin(ADMINSID, ADMINPSK);
+            if (WiFi.waitForConnectResult(15000) == WL_CONNECTED)
+                return;
+            WiFi.disconnect();
+            WiFi.mode(WIFI_OFF);
+            WiFi.mode(WIFI_STA);
+        }
+        WiFi.begin(FFWSID, FFWPSK);
+        delay(10000);
+    } else {
+        wifiRetry = 0;
+    }
+
 }
 
 bool checkInput()
@@ -274,7 +297,7 @@ void handleRoot()
         {
             s += "<h1>Restarting...</h1>";
         }
-        s += "FFW Shelly 1";
+        s += "FFW Shelly 1 Buildtime:" + String(BUILD_TIMESTAMP);
         s += "<div>Mode: ";
         s += mode;
         s += "<div>Relais: ";
