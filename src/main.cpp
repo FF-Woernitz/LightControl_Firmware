@@ -1,14 +1,4 @@
-/*
-  To upload through terminal you can use: curl -u admin:1234 -F "image=@v2.ino.generic.bin" 10.0.110.115/update
-*/
-#include <ESP8266WiFi.h>
-#include <WiFiClient.h>
-#include <ESP8266WebServer.h>
-#include <ESP8266HTTPUpdateServer.h>
-#include <EEPROM.h>
-
 #include <main.h>
-#include <config.h>
 
 ESP8266WebServer server(80);
 ESP8266HTTPUpdateServer httpUpdater;
@@ -18,12 +8,13 @@ void setup(void)
 
     pinMode(RELAY_PIN, OUTPUT);
     digitalWrite(RELAY_PIN, LOW);
+    pinMode(INPUT_PIN, INPUT);
 
     Serial.begin(115200);
     Serial.println();
     Serial.println("Booting FFW Shelly 1...");
 
-    const String chipid = String(ESP.getChipId(), HEX);
+    chipid = String(ESP.getChipId(), HEX);
     Serial.print("Chip-ID: ");
     Serial.println(chipid);
 
@@ -32,6 +23,7 @@ void setup(void)
     if (chipid == "c419a0") mode = 0; // Flur
     if (chipid == "c4f1c0") mode = 1; // Außen Fahrzeughalle old
     if (chipid == "c4994b") mode = 1; // Außen Gemeinde
+    if (chipid == "c42cad") mode = 2; // Fahrzeughalle
     if (mode == 255)
     {
         Serial.println("No mode for this chip-ID set. Setting to 0");
@@ -56,6 +48,7 @@ void loop(void)
     server.handleClient();
     blinkHandler();
     alarmHandler();
+    checkWifi();
 
     if (needRestart)
     {
@@ -134,7 +127,7 @@ void checkWifi()
 
 bool checkInput()
 {
-    return !digitalRead(INPUT_PIN);
+    return digitalRead(INPUT_PIN) == HIGH;
 }
 
 int getState()
@@ -287,39 +280,35 @@ void handleRoot()
         }
     }
 
+    char buff[32];
+    sprintf(buff, "%02d.%02d.%02d %02d:%02d:%02d", day(BUILD_TIMESTAMP), month(BUILD_TIMESTAMP), year(BUILD_TIMESTAMP), hour(BUILD_TIMESTAMP), minute(BUILD_TIMESTAMP), second(BUILD_TIMESTAMP));
+
     String s = "";
     if (!server.hasArg("json"))
     {
 
         s = F("<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, user-scalable=no\"/>");
-        s += "<title>FFW Shelly 1</title></head><body>";
+        s += String("<title>FFW Shelly 1 ") + chipid + "</title></head><body>";
         if (needRestart)
         {
             s += "<h1>Restarting...</h1>";
         }
-        s += "FFW Shelly 1 Buildtime:" + String(BUILD_TIMESTAMP);
-        s += "<div>Mode: ";
-        s += mode;
-        s += "<div>Relais: ";
-        s += (state == HIGH ? "ON" : "OFF");
-        s += "</div>";
-        s += "<div>Alarm: ";
-        s += (alarm > 0 ? "YES" : "NO");
+        s += "FFW Shelly 1";
+        s += String("<div>Chip-ID: ") + String(chipid) + "</div>";
+        s += String("<div>Buildtime: ") + String(buff) + "</div>";
+        s += String("<div>Mode: ") + String(mode) + "</div>";
+        s += String("<div>Relais: ") + (state == HIGH ? "ON" : "OFF") + "</div>";
+        s += String("<div>Alarm: ") + (alarm > 0 ? "YES" : "NO") + "</div>";
         if(alarm > 0 ){
-           s += "  Time left: " + String((alarm-millis())/1000); 
+           s += String("<div>  Time left: ") + String((alarm-millis())/1000) + "</div>"; 
         }
-        s += "</div>";
         if (mode != 2)
         {
-            s += "<div>Blinking: ";
-            s += (blinkCount > 0 ? "YES" : "NO");
-            s += "</div>";
+            s += String("<div>Blinking: ") + (blinkCount > 0 ? "YES" : "NO") + "</div>";
         }
         if (mode == 2)
         {
-            s += "<div>Input: ";
-            s += (checkInput() == HIGH ? "ON" : "OFF");
-            s += "</div>";
+            s += String("<div>Input: ") + (checkInput() == HIGH ? "ON" : "OFF") + "</div>";
         }
         s += "<div>";
         s += "<button type='button' onclick=\"location.href='?action=on';\" >Turn ON</button>";
@@ -340,6 +329,10 @@ void handleRoot()
         s += (blinkCount > 0 ? "true" : "false");
         s += ", \"mode\": ";
         s += mode;
+        s += ", \"buildtime\": ";
+        s += String(BUILD_TIMESTAMP);
+        s += ", \"chipid\": ";
+        s += String(chipid);
         s += "}";
     }
 
